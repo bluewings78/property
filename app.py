@@ -2,7 +2,6 @@ import streamlit as st
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
-from urllib.parse import quote  # 한글 검색어 변환을 위해 추가
 
 # 1. 페이지 기본 설정 (와이드 모드)
 st.set_page_config(page_title="실시간 정보 수집 대시보드", layout="wide")
@@ -15,17 +14,26 @@ user_query = st.text_input("실시간으로 모아보고 싶은 키워드를 입
 
 # 네이버 뉴스 크롤링 함수 정의
 def fetch_naver_news(keyword):
-    # 중요: 한글 검색어를 URL용 안전한 텍스트로 인코딩합니다 (예: '인공지능' -> '%EC%9D%B8%EA%B3%B5%EC%A7%80%EB%8A%A5')
-    encoded_keyword = quote(keyword)
+    # 중요: 검색어 앞뒤에 있는 눈에 보이지 않는 공백/줄바꿈 문자를 완전히 제거합니다.
+    clean_keyword = keyword.strip()
     
-    # 변환된 검색어를 URL에 적용
-    url = f"https://naver.com{encoded_keyword}&sm=tab_opt&sort=1"
+    # URL은 기본 주소만 명시합니다.
+    url = "https://naver.com"
+    
+    # requests가 검색어를 안전하게 인코딩하도록 파라미터 구조로 넘겨줍니다.
+    params = {
+        "where": "news",
+        "query": clean_keyword,
+        "sm": "tab_opt",
+        "sort": "1"  # 최신순 정렬
+    }
     
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
     
-    response = requests.get(url, headers=headers)
+    # params 옵션을 주면 URL 해석 에러가 발생하지 않습니다.
+    response = requests.get(url, headers=headers, params=params)
     if response.status_code != 200:
         return []
         
@@ -60,29 +68,31 @@ def fetch_naver_news(keyword):
 
 # 3. 검색 버튼 클릭 시 시각화
 if st.button("정보 수집 시작") and user_query:
-    with st.spinner(f"'{user_query}'에 대한 최신 정보를 수집하는 중입니다..."):
-        news_data = fetch_naver_news(user_query)
-        
-        if not news_data:
-            st.error("데이터를 가져오지 못했습니다. 키워드를 다시 확인해 주세요.")
-        else:
-            # 데이터를 판다스 데이터프레임으로 변환
-            df = pd.DataFrame(news_data)
+    # 검색어가 완전히 공백으로만 이루어지지 않았는지 재확인
+    if not user_query.strip():
+        st.warning("⚠️ 유효한 검색어를 입력해 주세요.")
+    else:
+        with st.spinner(f"'{user_query.strip()}'에 대한 최신 정보를 수집하는 중입니다..."):
+            news_data = fetch_naver_news(user_query)
             
-            # 화면을 2개 구역(좌/우)으로 분할
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.subheader("📊 데이터 구조화 그리드")
-                # 링크를 제외한 표 형태 출력
-                st.dataframe(df[["언론사", "제목", "요약 내용"]], use_container_width=True)
+            if not news_data:
+                st.error("데이터를 가져오지 못했습니다. 검색어에 특수문자가 너무 많거나 포털 사이트 연결이 원활하지 않습니다.")
+            else:
+                # 데이터를 판다스 데이터프레임으로 변환
+                df = pd.DataFrame(news_data)
                 
-            with col2:
-                st.subheader("📰 한눈에 보는 뉴스 피드")
-                # 카드가 위아래로 쌓이도록 반복문 출력
-                for item in news_data:
-                    with st.expander(f"[{item['언론사']}] {item['제목']}"):
-                        st.write(item['요약 내용'])
-                        st.markdown(f"[🔗 원문 기사 읽기]({item['링크']})")
-                        
-            st.success("🎯 실시간 정보 수집이 완료되었습니다!")
+                # 화면을 2개 구역(좌/우)으로 분할
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.subheader("📊 데이터 구조화 그리드")
+                    st.dataframe(df[["언론사", "제목", "요약 내용"]], use_container_width=True)
+                    
+                with col2:
+                    st.subheader("📰 한눈에 보는 뉴스 피드")
+                    for item in news_data:
+                        with st.expander(f"[{item['언론사']}] {item['제목']}"):
+                            st.write(item['요약 내용'])
+                            st.markdown(f"[🔗 원문 기사 읽기]({item['LINK'] if 'LINK' in item else item['링크']})")
+                            
+                st.success("🎯 실시간 정보 수집이 완료되었습니다!")
