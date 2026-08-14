@@ -2,6 +2,7 @@ import streamlit as st
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
+from urllib.parse import quote  # 한글 검색어 변환을 위해 추가
 
 # 1. 페이지 기본 설정 (와이드 모드)
 st.set_page_config(page_title="실시간 정보 수집 대시보드", layout="wide")
@@ -14,8 +15,12 @@ user_query = st.text_input("실시간으로 모아보고 싶은 키워드를 입
 
 # 네이버 뉴스 크롤링 함수 정의
 def fetch_naver_news(keyword):
-    # 네이버 뉴스 검색 URL (최신순 정렬)
-    url = f"https://naver.com{keyword}&sm=tab_opt&sort=1"
+    # 중요: 한글 검색어를 URL용 안전한 텍스트로 인코딩합니다 (예: '인공지능' -> '%EC%9D%B8%EA%B3%B5%EC%A7%80%EB%8A%A5')
+    encoded_keyword = quote(keyword)
+    
+    # 변환된 검색어를 URL에 적용
+    url = f"https://naver.com{encoded_keyword}&sm=tab_opt&sort=1"
+    
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
@@ -65,7 +70,7 @@ if st.button("정보 수집 시작") and user_query:
             df = pd.DataFrame(news_data)
             
             # 화면을 2개 구역(좌/우)으로 분할
-            col1, col2 = st.columns([1, 1])
+            col1, col2 = st.columns(2)
             
             with col1:
                 st.subheader("📊 데이터 구조화 그리드")
